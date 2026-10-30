@@ -1,136 +1,260 @@
 # Yukkuri Sprite Builder (ysp)
 
-**Yukkuri Sprite Builder**（略称: `ysp`）は、PSD → (分解) → waifu2x高画質化 → (再構築) → `[name]_x2.psd` を一気通貫で行うCUIツール。
+![Version](https://img.shields.io/badge/version-0.1.0-blue)
+![License](https://img.shields.io/badge/license-MIT-green)
 
-## 準備
+ゆっくり立ち絵PSDを「高画質化」して、YMM4（YukkuriMovieMaker4）用の設定まで自動で作るGUIツールです。
+
+* **作者:** KairaYK / ゆっくり廻螺
+* **ライセンス:** [MIT License](#9-ライセンスmitと第三者ソフトウェア)
+
+---
+
+## 📑 目次
+
+1. [このツールでできること](#1-このツールでできること)
+2. [必要なもの](#2-必要なもの)
+3. [初期設定（初回のみ）](#3-初期設定初回のみ)
+4. [GUIの使い方](#4-guiの使い方)
+5. [変換の仕様と注意点](#5-変換の仕様と注意点)
+6. [よくある質問・トラブルシューティング](#6-よくある質問トラブルシューティング)
+7. [関連ツール・謝辞](#7-関連ツール謝辞)
+8. [免責事項](#8-免責事項)
+9. [ライセンス（MIT）と第三者ソフトウェア](#9-ライセンスmitと第三者ソフトウェア)
+10. [更新履歴](#10-更新履歴)
+
+---
+
+## 1. このツールでできること
+
+Photoshop形式（`.psd`）の立ち絵を、レイヤー構造・名前・不透明度・合成モード・表示/非表示を保ったまま、まとめて高画質化します。
+
+- **(1) PSDを分解する** — レイヤーごとのPNGと、レイヤー情報（JSON）に分解
+- **(2) 高画質化する** — waifu2x-caffe で各PNGを拡大・ノイズ除去
+- **(3) PSDを再構築する** — 元と同じ構造の高画質PSD（`○○_x2.psd`）を出力
+- **(4) YMM4用の設定を作る** — 口パク・まばたきの設定ファイル（`○○_x2-ymm.json`）を出力
+
+複数のPSDをまとめて指定して、同時に処理することもできます。元のPSDファイルは書き換えません。
+
+---
+
+## 2. 必要なもの
+
+- **OS:** Windows (64bit)
+- **Python:** Python 3 ([3-1を参照](#3-1-python-3-をインストールする))
+- **Pythonライブラリ:** `psd-tools`, `Pillow` ([3-2を参照](#3-2-psd-tools-と-pillow-をインストールする))
+- **waifu2x-caffe:** CLI版 `waifu2x-caffe-cui.exe` ([3-3を参照](#3-3-waifu2x-caffe-を用意する))
+- **素材:** 立ち絵PSD
+
+> **Note**
+> - `ysp.exe` には Java の実行環境が含まれています。Javaを別途インストールする必要はありません。
+> - **動作確認環境:** Windows / Python 3.14 / waifu2x-caffe（cuDNN処理）
+
+---
+
+## 3. 初期設定（初回のみ）
+
+### 3-1. Python 3 をインストールする
+1. [Python公式ダウンロードページ](https://www.python.org/downloads/) から Python 3 のインストーラーをダウンロードして実行します（おすすめは 3.14 です）。
+2. インストーラーの最初の画面で、必ず **`Add python.exe to PATH`** （または「PATHに追加」）にチェックを入れてください。
+   > ※ 新しいPythonのインストーラー (Python install manager) を使う場合は、画面の案内に従ってインストールしてください。
+3. インストール後、コマンドプロンプトまたはPowerShellを開き、以下を実行してバージョンが表示されれば成功です。
+   ```bash
+   python --version
+   # または
+   py -3 --version
+   ```
+   > ※ `python` と入力して Microsoft Store が開く場合は、「アプリ実行エイリアス」の影響です。その場合は `py -3` を使ってください（yspも `py -3` を自動検索します）。
+
+### 3-2. psd-tools と Pillow をインストールする
+同梱の `quick_install_python_library.bat` を実行するか、ターミナルで以下を順に実行してください：
+
+```bash
+py -m pip install --upgrade pip
+py -m pip install psd-tools Pillow
 ```
-pip install -r src/main/resources/python/requirements.txt
-gradle wrapper       
-   # 初回のみ(gradlew生成)
-gradle installDist  
-    # build/install/ysp/bin/ysp(.bat) でも起動可
-gradle fatJar      
-     # build/libs/ysp-0.1.0-all.jar
+
+**動作確認:**
+```bash
+python -c "import psd_tools, PIL; print('OK')"
 ```
-要件: Java 17+, Python 3.x (python / py -3 / python3 を自動検出。見つからない場合は `--python <フルパス>`), waifu2x-caffe (`waifu2x-caffe-cui.exe`)
+> ※ `psd-tools` は PSD の読み込み、`Pillow` は画像処理に使用します。
+> ※ 権限エラーが出る場合は、末尾に `--user` を付けて実行してください。
 
-## GUIで使う (ysp.exe)
-`ysp.exe` を起動（引数なしで起動した場合はGUIが開きます）。CLIと同じ処理を画面から操作できます。
+### 3-3. waifu2x-caffe を用意する
+1. [waifu2x-caffe Releases](https://github.com/lltcggie/waifu2x-caffe) から入手し、任意の場所に解凍します。
+2. 展開したフォルダにある **`waifu2x-caffe-cui.exe`**（コンソール版）のパスを確認します。
+   > ※ GUI版の `waifu2x-caffe.exe` だけでは動作しません。
+3. NVIDIA製GPUを搭載している場合は、処理方式に **`cudnn`** を選ぶと高速に処理できます。利用できない環境では `gpu` または `cpu` を選択してください。
 
-- **処理するPSD**: ファイル / フォルダを一覧へドラッグ&ドロップ、または「ファイル追加」「フォルダ追加」で追加します（複数可）。
-- **ツール**: waifu2x-caffe-cui.exe の場所を指定します（一度指定すると次回以降は自動）。Pythonは空欄で自動検出します。
-  「環境チェック」で、PythonとPSD用ライブラリ(psd-tools / Pillow)、waifu2xが使えるかを確認できます。
-- **処理設定**: 拡大率・ノイズ除去・処理方式、同時に処理するPSD数、実行するステップ、waifu2xへの追加引数。
-- **YMM立ち絵設定**: 生成の有無、既存設定の上書き、n番号の基点、判定ルール(任意)。
-- **実行 / 中止**: 処理中の外部プロセスも含めて中止できます。ログは画面下部に表示されます。
-- 設定内容は次回起動時に引き継がれます（PSD一覧は引き継ぎません）。
-- コマンドラインで使うときは `ysp-cli.exe`（またはjar）に引数を付けて実行してください。
+### 3-4. ysp を起動して「環境チェック」を行う
+1. `ysp.exe` をダブルクリックして起動します。
+   > ※ Windows SmartScreen の警告が出た場合は、「詳細情報」→「実行」を選択します。
+2. **「ツール」** 欄の **「waifu2x-caffe-cui」** に、3-3 で用意した `waifu2x-caffe-cui.exe` を指定します。
+3. Python 欄は通常空欄（自動検出）のままで問題ありません。見つからない場合のみ `python.exe` のパスを指定します。
+4. 下部の **「環境チェック」** ボタンを押します。ログに以下のように表示されれば準備完了です。
+   ```text
+   [OK] Python と psd-tools / Pillow を確認しました
+   [OK] waifu2x: C:\...\waifu2x-caffe-cui.exe
+   ```
+   > ※ waifu2xのパスは自動保存されるため、次回以降の入力は不要です。
 
-### exeの作り方 (Windows、初回のみ)
-1. JDK 17以上（`jpackage` 付き）と Gradle を用意します。
-2. `build-exe.bat` を実行します。
-3. `build\dist\ysp\` に `ysp.exe`（GUI）と `ysp-cli.exe`（コンソール）ができます。**フォルダごと**配布・移動してください（Java実行環境が同梱されます）。
+---
 
-### アイコンの変更
-- **exe / ショートカットのアイコン**: `packaging\ysp.ico` を差し替えて `build-exe.bat` を実行します（`ysp.exe` と `ysp-cli.exe` の両方に反映）。
-  16〜256pxを含む複数サイズのicoを推奨します。ファイルが無い場合はJava標準のアイコンになります。
-- **ウィンドウ / タスクバーのアイコン**: `src\main\resources\icon.png`（256x256のPNG推奨）を差し替えて、`gradle fatJar` から再ビルドします。
-- 同梱のアイコンは `packaging\ysp-icon.png`（元画像）から作成しています。
+## 4. GUIの使い方
 
-### 配布用ドキュメント
-- `dist-docs\README.txt`（使い方・初期設定・関連ツール・免責・ライセンス）と `dist-docs\LICENSE.txt`（MIT）は、`build-exe.bat` が `build\dist\ysp\` へ自動でコピーします。
-- 作者名・バージョンを変えるときは、`README.txt` / `LICENSE.txt` と、`Main.VERSION`、`build-exe.bat`、`build.gradle` を合わせて更新してください。
+### 4-1. 基本の流れ
+1. **「処理するPSD」** エリアへ、PSDファイル（またはフォルダ）をドラッグ＆ドロップします（`ファイル追加...` / `フォルダ追加...` からも追加可能）。
+2. 必要に応じて **「処理設定」** を調整します（初期設定のままでも動作します）。
+3. **「実行」** ボタンを押すと処理が開始され、ログ欄に進捗が表示されます。
+4. 「完了」と表示されたら終了です。元PSDと同じフォルダに結果が出力されます。
 
-※ exeにはJavaは含まれますが、**Pythonは含まれません**。別途Python 3 と `pip install psd-tools Pillow` が必要です。
-※ exeを作らずに試す場合は、`gradle fatJar` の後に `run-gui.bat` でGUIを起動できます。
+### 4-2. 各項目の説明
 
-## 使い方
+| 設定カテゴリ | 項目名 | 説明 |
+| :--- | :--- | :--- |
+| **処理するPSD** | - | フォルダを追加した場合は直下の `*.psd` を一括処理します（出力済みの `*_x2.psd` は自動除外されます）。 |
+| **ツール** | `waifu2x-caffe-cui` | `waifu2x-caffe-cui.exe` または格納フォルダを指定。 |
+| | `Python (空欄=自動)` | 通常は空欄でOK。見つからない場合のみ `python.exe` を指定。 |
+| **処理設定** | `拡大率` | 既定: **2**（2倍）。1 に設定するとノイズ除去のみ行います。 |
+| | `ノイズ除去` | **なし** / **0〜3**（数値が大きいほど強く適用）。 |
+| | `処理方式` | **既定** / **cpu** / **gpu** / **cudnn** から選択。 |
+| | `同時に処理するPSD数` | 既定: **2**。メモリ不足時は 1 に設定してください。 |
+| | `同時に動かすwaifu2x数` | 既定: **1**。GPUが1枚の場合は 1 を推奨します。 |
+| | `実行するステップ` | 通常は3つともONにします。<br>※「3 PSD再構築」のみに設定すると、手修正した画像やJSONからPSDの再作成が可能です。 |
+| | `waifu2x追加引数` | 上級者向けオプション（通常は空欄）。 |
+| **YMM4 立ち絵設定** | `生成する` | ONで `○○_x2-ymm.json` を出力。 |
+| | `既存の設定を上書きする` | 既存ファイルがある場合の保護設定。再作成したい場合のみON。 |
+| | `n番号` | **0** / **1** / **none**。YMM4側で切り替えがずれる場合に変更をお試しください。 |
+| | `判定ルール(任意)` | レイヤー名の判定キーワードをカスタマイズするためのJSON。 |
+
+### 4-3. 出力されるファイル構成
+元のPSDが `D:\work\chara.psd` （拡大率2）の場合：
+
+```text
+D:\work\
+├── chara.psd                # 元のPSD（変更されません）
+├── chara_x2.psd             # 高画質化されたPSD
+├── chara_x2-ymm.json        # YMM4用立ち絵設定ファイル
+└── chara_part\              # 作業用キャッシュフォルダ
+    ├── chara.json           # レイヤー構造情報
+    ├── x1\                  # 分解された元画像
+    └── x2\                  # 高画質化された画像
 ```
-java -jar build/libs/ysp-0.1.0-all.jar ^
-  --psd "D:\work\chara.psd" ^
-  --waifu2x "C:\tools\waifu2x-caffe\waifu2x-caffe-cui.exe" ^   (2回目以降は省略可)
-  --scale 2 --noise 1 --process cudnn
+> **Warning**
+> 作業フォルダ内の `x1`, `x2` フォルダは実行のたびに上書き・再生成されます。手修正した画像を保持したい場合は別の場所に退避させてください。（処理完了後、`chara_part` フォルダは削除しても問題ありません）
+
+### 4-4. YMM4で使う
+1. 出力された `○○_x2.psd` と `○○_x2-ymm.json` を同じフォルダに配置します。
+2. YMM4側で `○○_x2.psd` を立ち絵として読み込むと、口パク・まばたき設定が自動反映されます。
+3. **自動判定ルール:**
+   - **口パク:** レイヤー/フォルダ名「口」配下
+     - `開け` `あわわ` を含む $\rightarrow$ 開いた口
+     - `閉じ` を含む $\rightarrow$ 閉じた口
+     - `笑` を含む $\rightarrow$ 笑顔用
+   - **まばたき:** レイヤー/フォルダ名「目」配下
+     - `普通目` `通常目` $\rightarrow$ 開いた目
+     - `半目` `半開` $\rightarrow$ 半目
+     - `閉じ` $\rightarrow$ 閉じた目
+4. ルールと異なる規則で作られた立ち絵の場合は、カスタムJSONルールを「判定ルール」に指定して読み込ませることができます。
+   ```json
+   {
+     "mouth_groups": ["くち"],
+     "eye_groups": ["め"],
+     "mouth_closed": ["閉じ"],
+     "smile": ["笑"],
+     "mouth_open": ["開け"],
+     "eye_open": ["普通目"],
+     "eye_half": ["半目"],
+     "eye_closed": ["閉じ"]
+   }
+   ```
+
+---
+
+## 5. 変換の仕様と注意点
+
+- **レイヤーマスク:** 画像の透明度に統合して出力されます（出力PSDにマスク自体は残りません）。
+- **特殊レイヤー:** テキスト、シェイプ、スマートオブジェクトなどはラスタライズ（画像化）して出力されます。調整レイヤー等の非画像レイヤーはスキップされます。
+- **再再現性:** クリッピング、レイヤー効果、ロック状態などは再現されない場合があります。
+- **プレビュー画像:** 出力PSDの合成プレビューは簡易的なものです。Photoshop等で開き直して保存すると正常に更新されます（YMM4等の利用には影響ありません）。
+- **サイズ制限:** PSD規格の制限（1辺 30,000 px）を超える大きな画像はエラーとなります。
+- **メモリ消費:** 大量のレイヤーや高精細な画像を扱う際はメモリを大きく消費します。動作が不安定な場合は「同時に処理するPSD数」を `1` に設定してください。
+
+---
+
+## 6. よくある質問・トラブルシューティング
+
+<details>
+<summary>Q. 「使用できるPythonが見つかりません」と表示される</summary>
+
+Pythonが正しくインストールされているか確認し、「Add python.exe to PATH」を有効にして再インストールするか、`Python (空欄=自動)` 欄に `python.exe` のフルパスを直接指定してください。
+</details>
+
+<details>
+<summary>Q. 「psd-tools / Pillow がありません」と表示される</summary>
+
+指定しているPython環境に対してライブラリをインストールしてください。
+```bash
+"C:\Path\To\python.exe" -m pip install psd-tools Pillow
 ```
-再構築だけやり直す場合 (JSON/画像を手で編集した後など): `--steps 3`
+</details>
 
-## 複数PSDの一括・並行処理
-`--psd` は何度でも指定でき、ファイル / フォルダ / ワイルドカードを混在できます。
+<details>
+<summary>Q. waifu2xの実行でエラーになる</summary>
+
+処理方式を `cudnn` $\rightarrow$ `gpu` $\rightarrow$ `cpu` の順に変更してお試しください。
+</details>
+
+<details>
+<summary>Q. 口パク・まばたきがYMM4で正しく動かない</summary>
+
+レイヤー命名規則を確認するか、設定の「n番号」を `1` または `none` に変更し、「既存の設定を上書きする」を有効にして再実行してください。
+</details>
+
+---
+
+## 7. 関連ツール・謝辞
+
+本ツールは以下の優れたオープンソースおよびサードパーティ製ソフトウェアを活用・連携しています。各権利者の皆様に感謝いたします。
+
+- **[YukkuriMovieMaker4](https://manjubox.net/ym4/)** - ゆっくり動画制作ソフト
+- **[Adobe Photoshop](https://www.adobe.com/jp/products/photoshop.html)** - 画像編集ソフトウェア
+- **[waifu2x](https://github.com/nagadomi/waifu2x)** / **[waifu2x-caffe](https://github.com/lltcggie/waifu2x-caffe)** - ディープラーニング画像超解像ツール
+- **[Claude](https://claude.ai/)** - AIアシスタント（開発補助）
+- **[psd-tools](https://github.com/psd-tools/psd-tools)** / **[Pillow](https://python-pillow.org/)** - Python画像処理ライブラリ
+
+---
+
+## 8. 免責事項
+
+- 本ソフトウェアは「現状のまま（AS IS）」で提供され、明示・黙示を問わずいかなる保証も行いません。
+- 本ソフトウェアの使用によって生じた損害（データ消失・ファイル破損等）について、作者は一切の責任を負いません。事前にバックアップを取得した上でご利用ください。
+- 本ツールで処理する素材は、利用権利および規約（二次創作ガイドライン・AI処理等の可否）を必ずご確認の上ご使用ください。
+- 本ツールは各種公式・開発元とは関係のない非公式ツールです。
+
+---
+
+## 9. ライセンス（MIT）と第三者ソフトウェア
+
+本ソフトウェアは **[MIT License](LICENSE.txt)** のもとで公開されています。
+
+```text
+Copyright (c) 2026 KairaYK (ゆっくり廻螺)
 ```
---psd "D:\work"                  フォルダ直下の *.psd すべて
---psd "D:\work\*.psd"           ワイルドカード (* と ? に対応)
---psd a.psd --psd b.psd           個別指定
---psd-list list.txt               1行1件のパス一覧 (空行と # で始まる行は無視、"..." で囲んでもよい)
-```
-- フォルダ/ワイルドカード指定では、本ツールの出力（`*_x2.psd`）は対象から除外します（ファイルを直接指定した場合は処理します）。
-- `--jobs N`: 同時に処理するPSDの数 (既定 2)。PythonでのPSD分解・再構築はPSDごとに並行して動きます。
-- `--waifu2x-jobs N`: 同時に動かすwaifu2xの数 (既定 1)。GPUが1枚の場合は1のままを推奨します。
-  他のPSDがwaifu2xを使用中の間は、順番待ち（`waiting for a free waifu2x slot...`）になります。
-- ログの行頭に `[PSD名]` が付きます。1つのPSDが失敗しても残りは処理を続け、最後に結果一覧を表示します（失敗があれば終了コード1）。
-- 同時処理が多いほどメモリを使います。大きなPSDでは `--jobs 1` から試してください。
 
-## 出力
-```
-D:\work\                    (参照PSDと同じフォルダ)
-├─ chara.psd
-├─ chara_x2.psd             再構築結果
-├─ chara_x2-ymm.json        YMM立ち絵設定(口パク/まばたき)
-└─ chara_part\              作業フォルダ
-   ├─ chara.json            レイヤー情報
-   ├─ x1\                   分解した画像 (PSDのグループ階層をサブフォルダで維持)
-   │   ├─ 0001_背景.png
-   │   └─ 体\
-   │       ├─ 0003_腕.png
-   │       └─ 0004_顔.png
-   └─ x2\                   高画質化後 (x1と同じ階層。拡大率に応じて x3, x4 ...)
-```
-※ `x1` と `x2` は実行のたびに削除して作り直します。拡大率1の場合は `x1_out` に出力します。
-※ waifu2xはPSDのフォルダ(階層)ごとに1回ずつ起動します。
+### 同梱ソフトウェア
+- **Java実行環境:** OpenJDKライセンス（GPL v2 + Classpath Exception等）に準拠
+- **[Jackson](https://github.com/FasterXML/jackson):** Apache License 2.0
 
-## waifu2xパスのキャッシュ
-`--waifu2x` を指定して実行し、実在を確認できたパスは設定ファイルに保存され、次回以降は省略できます。
-保存先: `%APPDATA%\ysp\config.json` (Windows)。`--clear-cache` で削除。
+---
 
-## YukkuriMovieMaker 立ち絵設定 (`[出力PSD名]-ymm.json`)
-再構築したPSDと同じフォルダに、YMM用の口パク/まばたき設定を生成します（例: `chara_x2.psd` → `chara_x2-ymm.json`）。
-形式はYMMが出力するものと同じ（BOM付きUTF-8 / CRLF）で、`Layers`(n番号) と `LayerPaths`(レイヤーパス) の両方を書きます。
+## 10. 更新履歴
 
-**判定のしかた** — レイヤー名から判定します（先頭の `!` `*` と末尾の ` #1` などは無視）。
-| 対象 | 条件 |
-|---|---|
-| 口パク | 名前が `口` のグループ内。`開け` / `あわわ` を含む = 開き、`閉じ` を含む = 閉じ、`笑` を含む = 笑顔系。 開き→閉じ、笑顔の開き→笑顔の閉じ のペアを作る |
-| まばたき | 名前が `目` のグループ内。`普通目` / `通常目` = 開き、`閉じ` = 閉じ、`半目` / `半開` があれば 開→半→閉 の3枚構成 |
-
-- 閉じレイヤーが複数ある場合は、名前が最も短いもの（番号が付かないもの）を使います。
-- 該当グループ・レイヤーが見つからない表情グループは、設定を作らずにログへ出力します。
-- 命名が違う場合は `--ymm-rules rules.json` でキーワードを上書きできます。
-  ```json
-  { "mouth_groups": ["くち"], "eye_groups": ["め"], "mouth_closed": ["閉じ"], "smile": ["笑"],
-    "mouth_open": ["開け"], "eye_open": ["普通目"], "eye_half": ["半目"], "eye_closed": ["閉じ"] }
-  ```
-- **既存の設定ファイルは上書きしません**（YMMで調整した内容を守るため）。作り直すときは `--ymm-overwrite`、生成しないときは `--no-ymm`。
-
-**n番号について**: YMM内部のレイヤー番号は、PSD内のレイヤーレコード順（フォルダの開始/終了も1つずつ数える）に
-一致するとサンプルから判断し、出力PSDの並びから `n番号` を計算しています（0始まり）。
-YMMで開いて口パク/まばたきの対象がずれる場合は、`--ymm-ids 1`（1始まり）を試すか、`--ymm-ids none` で番号を省いてください
-（`LayerPaths` が使われます）。
-
-## レイヤーマスク
-- 分解時: レイヤー自身のマスクと親グループのマスクは、PNGのアルファに統合(焼き込み)します。
-  ログの `masks_baked=` が統合した数です。
-- 再構築時: PSDの書き出しは psd-tools を使わず自前で行い、レイヤーマスクのデータを一切書きません。
-  各レイヤーの透明度は、画像自身の透明度チャンネルとして保存されます(出力に `masks_in_output=0`)。
-- 親グループのマスクは各子レイヤーに掛けるため、通常合成以外の合成モードの子では見た目が僅かに変わる場合があります。
-
-## 再構築PSDについて
-- 形式は PSD (RGB / 8bit)。グループ構造・名前・不透明度・合成モード・表示状態を保持します。
-- PSD内の「合成済み画像」(プレビュー用)は、通常合成・不透明度・表示状態のみで簡易合成したものです。
-  Photoshopなどレイヤーを読むアプリでは影響しません。サムネイルが必要な場合は一度開いて保存し直してください。
-- 重なり順は JSON の `stack_order` で決まります(ログに `stack_order=` と表示)。`unknown` の場合は警告が出ます。
-
-## JSON項目
-id, parent_id, type(layer/group), name, path, png(x1/x2からの相対パス), opacity(0-255), blend_mode, visible,
-x, y, width, height, rasterized, clipping, mask_baked + 先頭に stack_order, canvas{width,height}
-
-## v1の制限
-- テキスト/シェイプ/スマートオブジェクト/マスク付きはラスタライズ、調整レイヤー等はスキップ(ログに[WARN])
-- クリッピング・レイヤー効果・ロック状態は未復元(clippingはJSONに記録のみ)
+### v0.1.0 (2026-10-30)
+- 初版リリース
+- PSD分解 / waifu2xによる高画質化 / PSD再構築機能
+- レイヤーマスク統合・グループ階層の維持機能
+- YMM4用立ち絵設定（口パク・まばたき）自動生成
+- 複数PSDの並行・一括処理対応
+- GUI版 (`ysp.exe`) および CLI版 (`ysp-cli.exe`) の提供
